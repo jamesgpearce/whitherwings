@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>WhitherWings</title>
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+        <style>
+            body {
+                margin:0;
+            }
+            #viewport {
+                width: 480px;
+                height: 320px;
+                overflow: hidden;
+            }
+            #scene {
+            }
+            #ground {
+                position: absolute;
+                background: -webkit-gradient(linear, 0% 0%, 0% 100%, from(#cccccc), to(#eeeeee));
+                color:#000;
+            }
+            #bird {
+                position: absolute;
+                -webkit-transform-origin:18px, 13px;
+                height:26px;
+                width:30px;
+                background:url(bird.png);
+            }
+        </style>
+
+        <script type='text/javascript'>
+
+            var tw = {
+                scene: {
+                    birdIndent: 100,
+                    init: function () {
+                        this.element = document.getElementById('scene');
+                    },
+                    loop: function () {
+                        this.element.style['-webkit-transform'] =
+                           // "scale(" + (.8 + .2 * (tw.bird.y / tw.ground.height)) + ") " +
+                            "translate3D(" + (this.birdIndent - tw.bird.x) + "px, 0, 0)"
+                        ;
+                    },
+
+                },
+
+                ground: {
+                    width: 9000, // ~iPhone max
+                    height: 320,
+                    baseElevation: 200,
+                    harmonics: [[20,50],[10,40],[5,20]],
+                    elevationFunction: function (x) {
+                        var y = this.baseElevation;
+                        for (var i = 0, h = this.harmonics, l = h.length; i < l; i++) {
+                            y += h[i][0] * Math.sin(x/h[i][1]);
+                        }
+                        return y;
+                    },
+                    elevation: [],   // an array of the ground points
+                    impact: [],      // an array of points below which bird can not go, and their tangents
+                    step: 1,         // step interval of points calculated for ground
+
+                    init: function (impactOffset) {
+
+                        this.element = document.getElementById('ground');
+                        this.element.setAttribute('width', this.width);
+                        this.element.setAttribute('height', this.height);
+
+                        var prevImpactX = -1,       // keep track of 'previous' point to calculate slope
+                            prevImpact = [this.baseElevation - impactOffset, 0],
+                            prevY = this.elevationFunction(-1);
+
+                        for (var x = 0; x < this.width; x += this.step) {
+                            var y = this.elevationFunction(x),
+                                angle = Math.atan2(y - prevY, this.step),
+                                cos = Math.cos(angle),
+                                sin = Math.sin(angle),
+                                impactX = parseInt(x + impactOffset * sin),
+                                impact = [y - impactOffset * cos, angle];
+
+                            // populate arrays
+                            this.elevation[x] = y;
+                            this.impact[impactX] = impact;
+
+                            // interpolate the impact array (of arrays): must have a value for every X for watertight collision detection
+                            var xDelta = impactX - prevImpactX;
+                            if (xDelta > 1) {
+                                var impactIncrement = [
+                                    (impact[0]-prevImpact[0])/xDelta,
+                                    (impact[1]-prevImpact[1])/xDelta
+                                ];
+                                for (var xd = 1; xd < xDelta; xd++) {
+                                    this.impact[prevImpactX+xd] = [
+                                        prevImpact[0]+(impactIncrement[0]*xd),
+                                        prevImpact[1]+(impactIncrement[1]*xd)
+                                    ];
+                                }
+                            }
+
+                            // keep reference to this point for next loop iteration
+                            prevImpactX = impactX;
+                            prevImpact = impact;
+                            prevY = y;
+                        }
+
+                        ctx: ;
+
+                    },
+                    draw: function () {
+                        this.drawSlope();
+                        // this.drawImpact(); // just for show
+                    },
+                    drawSlope: function () {
+                        var ctx = this.element.getContext('2d'),
+                            grd = ctx.createLinearGradient(0,200,0,320);
+                        grd.addColorStop(0, '#cccccc');
+                        grd.addColorStop(1, '#777777');
+                        ctx.fillStyle = grd;
+                        ctx.strokeStyle = '#666666';
+                        ctx.beginPath();
+                        ctx.lineWidth = 3;
+                        for (var x = 0, y; x < this.width; x += this.step) {
+                            if (y = this.elevation[x]) {
+                                ctx.lineTo(x, y);
+                            }
+                        }
+                        ctx.lineTo(this.width, this.height+5);
+                        ctx.lineTo(0, this.height+5);
+                        ctx.lineTo(0, this.elevation[x]);
+                        ctx.fill();
+                        ctx.stroke();
+                    },
+                    drawImpact: function () {
+                        var ctx = this.element.getContext('2d');
+                        for (var x = 0, len = 20, impact; x < this.width; x += 1) {
+                            if (impact = this.impact[x]) {
+                                ctx.beginPath();
+                                ctx.lineWidth = 0.2;
+                                ctx.moveTo(x, impact[0]);
+                                ctx.lineTo(x + Math.sin(impact[1])*len, impact[0] - Math.cos(impact[1])*len);
+                                ctx.stroke();
+                            }
+                        }
+                    },
+                },
+
+                bird: {
+                    x:200,
+                    y:20,
+                    dx:2,
+                    dy:0,
+                    gravity:1,
+                    radius:13,
+                    init: function () {
+                        this.element = document.getElementById('bird');
+                    },
+                    loop: function (interval) {
+                        var impact = tw.ground.impact[parseInt(this.x)];
+                        if(this.y > impact[0]) { // boing
+                            this.y = impact[0];
+                            var angle = Math.atan2(this.dy, this.dx),
+                                speed = Math.sqrt(Math.pow(this.dx, 2) + Math.pow(this.dy, 2)),
+                                newAngle = (2*impact[1]) - angle;
+                            this.dx = speed * Math.cos(newAngle);
+                            this.dy = speed * Math.sin(newAngle);
+                        }
+                        if (this.x < this.radius) {
+                            this.x = this.radius;
+                            this.dx = - this.dx;
+                        } else if (this.x > tw.ground.width - this.radius) {
+                            this.x = tw.ground.width - this.radius;
+                            this.dx = - this.dx;
+                        }
+
+
+                        this.dy += this.gravity * interval;
+
+                        this.x += this.dx * interval;
+                        this.y += this.dy * interval;
+                        this.element.style['-webkit-transform'] =
+                            "translate3D(" + (this.x - 15) + "px," + (this.y - 13) + "px, 0) " +
+                            "rotate(" + (this.dy*2) + "deg)"
+                        ;
+                    },
+                },
+
+
+                init: function () {
+
+                    this.scene.init();
+                    this.bird.init(this.ground);
+                    this.ground.init(this.bird.radius);
+
+                    this.ground.draw();
+                    this.start();
+
+                },
+
+                interval: 15,
+                start: function () {
+                    this.birdLoop = setInterval(function () {tw.bird.loop(.2);}, this.interval);
+                    this.sceneLoop = setInterval(function () {tw.scene.loop();}, this.interval);
+                },
+                stop: function () {
+                    clearInterval(this.birdLoop);
+                    clearInterval(this.sceneLoop);
+                }
+
+
+            };
+
+            window.addEventListener('load', function () {
+                setTimeout(function() {window.scrollTo(0, 1)}, 100);
+                tw.init();
+            }, false);
+            window.addEventListener('touchstart', function (e) {e.preventDefault();}, false);
+
+
+                    //document.addEventListener('keypress', function () {
+                    //    tw.bird.glide = 0.2;
+                    //}, false);
+                    //document.addEventListener('keyup', function () {
+                    //    tw.bird.glide = 1;
+                    //}, false);
+                    //
+                    //
+
+        </script>
+
+    </head>
+    <body>
+        <div id='viewport'>
+        <div id='scene'>
+                <canvas id='ground'></canvas>
+                <div id='bird'></div>
+            </div>
+        </div>
+
+    </body>
+</html>
