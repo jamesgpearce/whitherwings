@@ -7,11 +7,13 @@
         <style>
             body {
                 margin:0;
+                -webkit-user-select: none;
             }
             #viewport {
                 width: 480px;
-                height: 320px;
+                height: 300px;
                 overflow: hidden;
+                position:absolute;
             }
             #scene {
             }
@@ -22,10 +24,26 @@
             }
             #bird {
                 position: absolute;
-                -webkit-transform-origin:18px, 13px;
+                -webkit-transform-origin:16px, 15px;
                 height:26px;
                 width:30px;
                 background:url(bird.png);
+            }
+            #status {
+                position: absolute;
+                top:2px;
+                left:2px;
+            }
+
+            @media (min-width: 745px) {
+                #viewport {
+                    margin:2em auto;
+                    border: 132px solid transparent;
+                    border-top-width:52px;
+                    border-bottom-width:34px;
+                    background: url(iphone.png) no-repeat;
+                    -webkit-background-origin:border-box;
+                }
             }
         </style>
 
@@ -157,25 +175,29 @@
                         this.element = document.getElementById('bird');
                     },
                     loop: function (interval) {
-                        var impact = tw.ground.impact[parseInt(this.x)];
+                        var speed = Math.sqrt(Math.pow(this.dx, 2) + Math.pow(this.dy, 2)),
+                            impact = tw.ground.impact[parseInt(this.x)];
                         if(this.y > impact[0]) { // boing
                             this.y = impact[0];
                             var angle = Math.atan2(this.dy, this.dx),
-                                speed = Math.sqrt(Math.pow(this.dx, 2) + Math.pow(this.dy, 2)),
                                 newAngle = (2*impact[1]) - angle;
                             this.dx = speed * Math.cos(newAngle);
                             this.dy = speed * Math.sin(newAngle);
                         }
-                        if (this.x < this.radius) {
-                            this.x = this.radius;
+                        if (this.x < tw.scene.birdIndent + this.radius) {
+                            this.x = tw.scene.birdIndent + this.radius;
                             this.dx = - this.dx;
-                        } else if (this.x > tw.ground.width - this.radius) {
-                            this.x = tw.ground.width - this.radius;
+                        } else if (this.x > tw.ground.width - 480) {
+                            this.x = tw.ground.width - 480;
                             this.dx = - this.dx;
                         }
 
-
                         this.dy += this.gravity * interval;
+
+                        if (speed>20) {
+                            this.dx *= .9;
+                            this.dy *= .9;
+                        }
 
                         this.x += this.dx * interval;
                         this.y += this.dy * interval;
@@ -186,28 +208,54 @@
                     },
                 },
 
+                status: {
+                    init: function () {
+                        this.element = document.getElementById('status');
+                    },
+                    loop: function (interval) {
+                        this.element.innerText = parseInt(100* tw.bird.x / (tw.ground.width-480)) + '%';
+                    }
+                },
+
 
                 init: function () {
 
                     this.scene.init();
+                    this.status.init();
                     this.bird.init(this.ground);
                     this.ground.init(this.bird.radius);
 
                     this.ground.draw();
+
+                    document.addEventListener('touchstart', tw.hold, false);
+                    document.addEventListener('touchend', tw.release, false);
+
+                    document.addEventListener('mousedown', tw.hold, false);
+                    document.addEventListener('mouseup', tw.release, false);
+
                     this.start();
 
                 },
 
                 interval: 15,
                 start: function () {
-                    this.birdLoop = setInterval(function () {tw.bird.loop(.2);}, this.interval);
-                    this.sceneLoop = setInterval(function () {tw.scene.loop();}, this.interval);
+                    this.loop = setInterval(function () {
+                        tw.bird.loop(.2);
+                        tw.scene.loop();
+                        tw.status.loop();
+                    }, this.interval);
                 },
                 stop: function () {
-                    clearInterval(this.birdLoop);
-                    clearInterval(this.sceneLoop);
-                }
+                    clearInterval(this.loop);
+                },
 
+                hold: function (e) {
+                    tw.bird.gravity = 3;
+                    e.preventDefault(); // e.g. scroll
+                },
+                release: function (e) {
+                    tw.bird.gravity = 1;
+                }
 
             };
 
@@ -215,27 +263,17 @@
                 setTimeout(function() {window.scrollTo(0, 1)}, 100);
                 tw.init();
             }, false);
-            window.addEventListener('touchstart', function (e) {e.preventDefault();}, false);
-
-
-                    //document.addEventListener('keypress', function () {
-                    //    tw.bird.glide = 0.2;
-                    //}, false);
-                    //document.addEventListener('keyup', function () {
-                    //    tw.bird.glide = 1;
-                    //}, false);
-                    //
-                    //
 
         </script>
 
     </head>
     <body>
         <div id='viewport'>
-        <div id='scene'>
+            <div id='scene'>
                 <canvas id='ground'></canvas>
                 <div id='bird'></div>
             </div>
+            <div id='status'></div>
         </div>
 
     </body>
