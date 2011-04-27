@@ -50,14 +50,29 @@
         <script type='text/javascript'>
 
             var tw = {
-                scene: {
+
+                settings: { // tune for gameplay
+                    frameMs: 15, //60hz+
+                    physicsInterval: 0.05,
+                    groundWidth: 9000, // ~iPhone max
+                    groundHeight: 320,
+                    groundBaseElevation: 200,
+                    groundHarmonics: [[30,50],[30,200],[0,20]], //mag,freq
                     birdIndent: 100,
+                    birdMinSpeed: 5,
+                    birdMaxSpeed: 50,
+                    birdGlideGravity: 1,
+                    birdFallGravity: 10
+                },
+
+                scene: {
                     init: function () {
+                        this.birdIndent = tw.settings.birdIndent,
                         this.element = document.getElementById('scene');
                     },
                     loop: function () {
                         this.element.style['-webkit-transform'] =
-                           // "scale(" + (.8 + .2 * (tw.bird.y / tw.ground.height)) + ") " +
+                           //scale(" + (.8 + .2 * (tw.bird.y / tw.ground.height)) + ") " +
                             "translate3D(" + (this.birdIndent - tw.bird.x) + "px, 0, 0)"
                         ;
                     },
@@ -65,34 +80,26 @@
                 },
 
                 ground: {
-                    width: 9000, // ~iPhone max
-                    height: 320,
-                    baseElevation: 200,
-                    harmonics: [[20,50],[10,40],[5,20]],
-                    elevationFunction: function (x) {
-                        var y = this.baseElevation;
-                        for (var i = 0, h = this.harmonics, l = h.length; i < l; i++) {
-                            y += h[i][0] * Math.sin(x/h[i][1]);
-                        }
-                        return y;
-                    },
                     elevation: [],   // an array of the ground points
                     impact: [],      // an array of points below which bird can not go, and their tangents
-                    step: 1,         // step interval of points calculated for ground
 
                     init: function (impactOffset) {
 
                         this.element = document.getElementById('ground');
+                        this.width = tw.settings.groundWidth;
+                        this.height = tw.settings.groundHeight;
                         this.element.setAttribute('width', this.width);
                         this.element.setAttribute('height', this.height);
 
-                        var prevImpactX = -1,       // keep track of 'previous' point to calculate slope
+                        var y0 = tw.settings.groundBaseElevation,
+                            harmonics = tw.settings.groundHarmonics,
+                            prevImpactX = -1,       // keep track of 'previous' point to calculate slope
                             prevImpact = [this.baseElevation - impactOffset, 0],
-                            prevY = this.elevationFunction(-1);
+                            prevY = this.elevationFunction(-1, y0, harmonics);
 
-                        for (var x = 0; x < this.width; x += this.step) {
-                            var y = this.elevationFunction(x),
-                                angle = Math.atan2(y - prevY, this.step),
+                        for (var x = 0; x < this.width; x += 1) {
+                            var y = this.elevationFunction(x, y0, harmonics),
+                                angle = Math.atan2(y - prevY, 1),
                                 cos = Math.cos(angle),
                                 sin = Math.sin(angle),
                                 impactX = parseInt(x + impactOffset * sin),
@@ -123,8 +130,13 @@
                             prevY = y;
                         }
 
-                        ctx: ;
-
+                    },
+                    elevationFunction: function (x, y0, harmonics) {
+                        var y = y0;
+                        for (var i = 0, l = harmonics.length; i < l; i++) {
+                            y += harmonics[i][0] * Math.sin(x/harmonics[i][1]);
+                        }
+                        return y;
                     },
                     draw: function () {
                         this.drawSlope();
@@ -139,7 +151,7 @@
                         ctx.strokeStyle = '#666666';
                         ctx.beginPath();
                         ctx.lineWidth = 3;
-                        for (var x = 0, y; x < this.width; x += this.step) {
+                        for (var x = 0, y; x < this.width; x += 1) {
                             if (y = this.elevation[x]) {
                                 ctx.lineTo(x, y);
                             }
@@ -169,43 +181,56 @@
                     y:20,
                     dx:2,
                     dy:0,
-                    gravity:1,
                     radius:13,
                     init: function () {
                         this.element = document.getElementById('bird');
+                        this.gravity = tw.settings.birdGlideGravity;
+                        this.minSpeed = tw.settings.birdMinSpeed;
+                        this.maxSpeed = tw.settings.birdMaxSpeed;
                     },
                     loop: function (interval) {
                         var speed = Math.sqrt(Math.pow(this.dx, 2) + Math.pow(this.dy, 2)),
                             impact = tw.ground.impact[parseInt(this.x)];
+
                         if(this.y > impact[0]) { // boing
                             this.y = impact[0];
-                            var angle = Math.atan2(this.dy, this.dx),
-                                newAngle = (2*impact[1]) - angle;
-                            this.dx = speed * Math.cos(newAngle);
-                            this.dy = speed * Math.sin(newAngle);
+                            var birdAngle = Math.atan2(this.dy, this.dx),
+                                slopeAngle = impact[1],
+                                impactAngle = birdAngle - slopeAngle;
+                                newSpeed = speed * Math.cos(impactAngle);
+                            if (newSpeed < this.minSpeed) {
+                                newSpeed = this.minSpeed;
+                            }
+                            this.dx = newSpeed * Math.cos(slopeAngle);
+                            this.dy = newSpeed * Math.sin(slopeAngle);
                         }
-                        if (this.x < tw.scene.birdIndent + this.radius) {
-                            this.x = tw.scene.birdIndent + this.radius;
-                            this.dx = - this.dx;
-                        } else if (this.x > tw.ground.width - 480) {
+
+                        if (this.x > tw.ground.width - 480) { //you win
                             this.x = tw.ground.width - 480;
                             this.dx = - this.dx;
                         }
 
                         this.dy += this.gravity * interval;
 
-                        if (speed>20) {
-                            this.dx *= .9;
-                            this.dy *= .9;
+                        if (speed > this.maxSpeed) {
+                            var brake = (this.maxSpeed/speed);
+                            this.dx *= brake;
+                            this.dy *= brake;
                         }
 
                         this.x += this.dx * interval;
                         this.y += this.dy * interval;
                         this.element.style['-webkit-transform'] =
                             "translate3D(" + (this.x - 15) + "px," + (this.y - 13) + "px, 0) " +
-                            "rotate(" + (this.dy*2) + "deg)"
+                            "rotate(" + (this.dy) + "deg)"
                         ;
                     },
+                    fall: function () {
+                        this.gravity = tw.settings.birdFallGravity;
+                    },
+                    glide: function () {
+                        this.gravity = tw.settings.birdGlideGravity;
+                    }
                 },
 
                 status: {
@@ -230,31 +255,30 @@
                     document.addEventListener('touchstart', tw.hold, false);
                     document.addEventListener('touchend', tw.release, false);
 
-                    document.addEventListener('mousedown', tw.hold, false);
-                    document.addEventListener('mouseup', tw.release, false);
+                    document.addEventListener('keydown', tw.hold, false);
+                    document.addEventListener('keyup', tw.release, false);
 
                     this.start();
 
                 },
 
-                interval: 15,
                 start: function () {
                     this.loop = setInterval(function () {
-                        tw.bird.loop(.2);
+                        tw.bird.loop(tw.settings.physicsInterval);
                         tw.scene.loop();
                         tw.status.loop();
-                    }, this.interval);
+                    }, tw.settings.frameInterval);
                 },
                 stop: function () {
                     clearInterval(this.loop);
                 },
 
                 hold: function (e) {
-                    tw.bird.gravity = 3;
+                    tw.bird.fall();;
                     e.preventDefault(); // e.g. scroll
                 },
                 release: function (e) {
-                    tw.bird.gravity = 1;
+                    tw.bird.glide();
                 }
 
             };
