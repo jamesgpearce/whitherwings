@@ -15,12 +15,13 @@
                 overflow: hidden;
                 position: relative;
             }
-            #scene {
-            }
             #ground {
                 position: absolute;
-                background: -webkit-gradient(linear, 0% 0%, 0% 100%, from(#cccccc), to(#eeeeee));
-                color:#000;
+                height:600px;
+                background:#777777;
+            }
+            #ground canvas {
+                background: -webkit-gradient(linear, 0% 0%, 0% 100%, from(#ffffff), to(#cccccc));
             }
             #bird {
                 position: absolute;
@@ -53,27 +54,29 @@
 
                 settings: { // tune for gameplay
                     frameMs: 15, //60hz+
-                    physicsInterval: 0.05,
+                    physicsInterval: 0.1,
                     groundWidth: 9000, // ~iPhone max
-                    groundHeight: 320,
+                    groundHeight: 300,
                     groundBaseElevation: 200,
-                    groundHarmonics: [[30,50],[30,200],[0,20]], //mag,freq
-                    birdIndent: 100,
+                    groundHarmonics: [[40,50],[40,200]], //mag,freq
+                    birdLeft: 100,
+                    birdTop: 100,
                     birdMinSpeed: 5,
-                    birdMaxSpeed: 50,
+                    birdMaxSpeed: 40,
                     birdGlideGravity: 1,
-                    birdFallGravity: 10
+                    birdFallGravity: 5
                 },
 
                 scene: {
                     init: function () {
-                        this.birdIndent = tw.settings.birdIndent,
+                        this.birdLeft = tw.settings.birdLeft,
+                        this.birdTop = tw.settings.birdTop,
                         this.element = document.getElementById('scene');
                     },
                     loop: function () {
                         this.element.style['-webkit-transform'] =
-                           //scale(" + (.8 + .2 * (tw.bird.y / tw.ground.height)) + ") " +
-                            "translate3D(" + (this.birdIndent - tw.bird.x) + "px, 0, 0)"
+                           "scale(" + (.7 + .3 * (tw.bird.y / tw.ground.height)) + ") " +
+                            "translate3D(" + (this.birdTop - tw.bird.x) + "px, " + (this.birdLeft-tw.bird.y) + "px, 0)"
                         ;
                     },
 
@@ -86,10 +89,12 @@
                     init: function (impactOffset) {
 
                         this.element = document.getElementById('ground');
+                        this.canvas = this.element.firstChild;
                         this.width = tw.settings.groundWidth;
                         this.height = tw.settings.groundHeight;
-                        this.element.setAttribute('width', this.width);
-                        this.element.setAttribute('height', this.height);
+                        this.canvas.setAttribute('width', this.width);
+                        this.canvas.setAttribute('height', this.height);
+
 
                         var y0 = tw.settings.groundBaseElevation,
                             harmonics = tw.settings.groundHarmonics,
@@ -143,8 +148,8 @@
                         // this.drawImpact(); // just for show
                     },
                     drawSlope: function () {
-                        var ctx = this.element.getContext('2d'),
-                            grd = ctx.createLinearGradient(0,200,0,320);
+                        var ctx = this.canvas.getContext('2d'),
+                            grd = ctx.createLinearGradient(0,200,0,this.height);
                         grd.addColorStop(0, '#cccccc');
                         grd.addColorStop(1, '#777777');
                         ctx.fillStyle = grd;
@@ -163,8 +168,8 @@
                         ctx.stroke();
                     },
                     drawImpact: function () {
-                        var ctx = this.element.getContext('2d');
-                        for (var x = 0, len = 20, impact; x < this.width; x += 1) {
+                        var ctx = this.canvas.getContext('2d');
+                        for (var x = 0, len = 20, impact; x < this.width; x += 3) {
                             if (impact = this.impact[x]) {
                                 ctx.beginPath();
                                 ctx.lineWidth = 0.2;
@@ -233,6 +238,12 @@
                     }
                 },
 
+
+                dusk: {
+                    init: function () {
+                    },
+                },
+
                 status: {
                     init: function () {
                         this.element = document.getElementById('status');
@@ -242,13 +253,13 @@
                     }
                 },
 
-
                 init: function () {
 
                     this.scene.init();
                     this.status.init();
                     this.bird.init(this.ground);
                     this.ground.init(this.bird.radius);
+                    this.dusk.init();
 
                     this.ground.draw();
 
@@ -294,8 +305,9 @@
     <body>
         <div id='viewport'>
             <div id='scene'>
-                <canvas id='ground'></canvas>
+                <div id='ground'><canvas></canvas></div>
                 <div id='bird'></div>
+                <div id='dusk'></div>
             </div>
             <div id='status'></div>
         </div>
